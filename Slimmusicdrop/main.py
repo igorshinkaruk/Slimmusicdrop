@@ -1,13 +1,16 @@
+import os
 import yt_dlp
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# --- Конфігурація ---
-TELEGRAM_TOKEN = "7349204352:AAH_Xsu07bSXx3Kzy1le39xDgmEM2whWoCw"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Railway підставить змінну автоматично
+
+if TELEGRAM_TOKEN is None:
+    raise ValueError("Змінна TELEGRAM_TOKEN не встановлена! Додайте її у Railway Environment Variables.")
+
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
-
 
 # --- Команда /start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19,7 +22,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     except FileNotFoundError:
         await update.message.reply_text("🎵 Привіт! Напиши назву треку або посилання з YouTube Music, щоб отримати аудіо.")
-
 
 # --- Логіка пошуку та завантаження ---
 async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -116,7 +118,6 @@ async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("❌ Сталася помилка при завантаженні.")
         print(f"Error: {e}")
 
-
 # --- Запуск бота ---
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -125,7 +126,6 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_youtube_music))
 
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
