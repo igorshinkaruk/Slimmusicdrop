@@ -1,0 +1,3 @@
+python-telegram-bot
+aiogram==3.*
+yt-dlp
