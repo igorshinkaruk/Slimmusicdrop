@@ -1,10 +1,11 @@
 import os
 import yt_dlp
+import json
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Railway підставить змінну автоматично
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 if TELEGRAM_TOKEN is None:
     raise ValueError("Змінна TELEGRAM_TOKEN не встановлена! Додайте її у Railway Environment Variables.")
@@ -12,19 +13,65 @@ if TELEGRAM_TOKEN is None:
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
+USAGE_FILE = "usage.json"
+SUBSCRIPTION_URL = "https://your-subscription-link.com"  # заміни на своє посилання
+
+def load_usage():
+    if os.path.exists(USAGE_FILE):
+        with open(USAGE_FILE, "r") as f:
+            return json.load(f)
+    return {"plays": 0}
+
+def save_usage(data):
+    with open(USAGE_FILE, "w") as f:
+        json.dump(data, f)
+
+def check_subscription():
+    usage = load_usage()
+    return usage["plays"] < 5
+
+def increase_usage():
+    usage = load_usage()
+    usage["plays"] += 1
+    save_usage(usage)
+
 # --- Команда /start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("Купити підписку 💳", url=SUBSCRIPTION_URL)]]
+
+    if not check_subscription():
+        await update.message.reply_text(
+            "❌ Ліміт 5 прослуховувань вичерпано. Купіть підписку.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
     try:
         with open("images/background.jpg", "rb") as photo:
             await update.message.reply_photo(
                 photo=photo,
-                caption="🎵 Привіт! Напиши назву треку або посилання з YouTube Music, щоб отримати аудіо."
+                caption="🎵 Привіт! Напиши назву треку або посилання з YouTube Music, щоб отримати аудіо.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
     except FileNotFoundError:
-        await update.message.reply_text("🎵 Привіт! Напиши назву треку або посилання з YouTube Music, щоб отримати аудіо.")
+        await update.message.reply_text(
+            "🎵 Привіт! Напиши назву треку або посилання з YouTube Music, щоб отримати аудіо.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 # --- Логіка пошуку та завантаження ---
 async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("Купити підписку 💳", url=SUBSCRIPTION_URL)]]
+
+    if not check_subscription():
+        await update.message.reply_text(
+            "❌ Ліміт 5 прослуховувань вичерпано. Купіть підписку.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    increase_usage()
+
     query = update.message.text.strip()
     if not query:
         await update.message.reply_text("❌ Вкажи запит або посилання.")
@@ -52,7 +99,6 @@ async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYP
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(query, download=True)
-
             entries = info_dict["entries"] if "entries" in info_dict and info_dict["entries"] else [info_dict]
 
             for entry in entries:
@@ -111,8 +157,8 @@ async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYP
 
                 yt_url = entry.get("webpage_url", "")
                 if yt_url:
-                    keyboard = [[InlineKeyboardButton("Відкрити на YouTube ▶️", url=yt_url)]]
-                    await update.message.reply_text("🔗 Перейти до відео:", reply_markup=InlineKeyboardMarkup(keyboard))
+                    keyboard_video = [[InlineKeyboardButton("Відкрити на YouTube ▶️", url=yt_url)]]
+                    await update.message.reply_text("🔗 Перейти до відео:", reply_markup=InlineKeyboardMarkup(keyboard_video))
 
     except Exception as e:
         await update.message.reply_text("❌ Сталася помилка при завантаженні.")
@@ -121,10 +167,8 @@ async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYP
 # --- Запуск бота ---
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_youtube_music))
-
     app.run_polling()
 
 if __name__ == "__main__":
