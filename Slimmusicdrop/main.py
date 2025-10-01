@@ -15,6 +15,7 @@ DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 USAGE_FILE = "usage.json"
 SUBSCRIPTION_URL = "https://your-subscription-link.com"  # заміни на своє посилання
+ADMIN_ID = 5759462723  # заміни на свій Telegram ID
 
 def load_usage():
     if os.path.exists(USAGE_FILE):
@@ -58,6 +59,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎵 Привіт! Напиши назву треку або посилання з YouTube Music, щоб отримати аудіо.",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+
+# --- Команда /reset (тільки адмін) ---
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ У вас немає доступу до цієї команди.")
+        return
+
+    usage = {"plays": 0}
+    save_usage(usage)
+    await update.message.reply_text("✅ Лічильник прослуховувань скинуто.")
 
 # --- Логіка пошуку та завантаження ---
 async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,6 +179,7 @@ async def search_youtube_music(update: Update, context: ContextTypes.DEFAULT_TYP
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("reset", reset))  # тільки адмін
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, search_youtube_music))
     app.run_polling()
 
